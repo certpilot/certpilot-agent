@@ -1,16 +1,15 @@
 # What the agent image build must never see.
 #
-# This file exists because the build context moved. Docker reads .dockerignore
-# from the context directory, so the one at the repository root stopped applying
-# to this image the moment it started building from `agent/` — and the entries
-# that matter in it are not about size.
+# The first entries are not about size. A build context is handed to the daemon
+# whole before any instruction runs, and the builder stage does `COPY . .`, so
+# anything matching these patterns would reach a layer.
 #
 # An agent generates its identity key on the host and keeps it in its state
 # directory. Anybody who has run `CERTPILOT_AGENT_STATE=./state certpilot-agent
-# enrol` while working on this module has an ed25519 private key sitting in the
-# tree, and a build context is handed to the daemon whole before any instruction
-# runs. A certificate management product baking its own private keys into a
-# layer is the specific failure this file prevents.
+# enrol` while working on this repository has an ed25519 private key sitting in
+# the tree. A certificate management product baking its own private keys into a
+# layer is the specific failure this file prevents — and it is the one failure
+# here that deleting the image does not undo, because layers get pushed.
 .env
 .env.*
 .certpilot/
@@ -22,6 +21,7 @@ state/
 .git/
 .github/
 bin/
+scripts/
 *.md
 *.log
 .DS_Store

@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/certpilot/certpilot/agent"
+	agent "github.com/certpilot/certpilot-agent"
 )
 
 // runProfiles answers "does CertPilot cover what I run".

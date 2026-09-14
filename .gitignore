@@ -1,0 +1,50 @@
+# ── Build artifacts ──────────────────────────────────────
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/vendor/
+
+# ── Test output ──────────────────────────────────────────
+*.test
+coverage.out
+coverage.txt
+coverage.html
+
+# ── Local state and secrets ──────────────────────────────
+#
+# An enrolled agent keeps its ed25519 identity key in its state directory, and
+# the certificates it has been issued sit beside it. Running the agent from a
+# checkout puts both in the tree, so this is here for the same reason the key
+# patterns below are, not merely because it is generated.
+state/
+.certpilot/
+
+# Key material, and anything else key-shaped.
+*.pem
+*.key
+*.p12
+*.pfx
+
+.env
+.env.local
+.env.*.local
+
+# Working directory for scripts/verify-profiles.sh.
+.verify-work/
+
+# ── Tooling ──────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ── OS ───────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Logs ─────────────────────────────────────────────────
+*.log
