@@ -1,0 +1,273 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A superseded run tells you nothing about the commit that replaced it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - run: make build
+      - run: make test
+      - run: make lint
+
+      # An untidy go.mod means the module graph here is not the one a fresh
+      # clone resolves, and the difference shows up as a mystery on somebody
+      # else's machine.
+      - name: go.mod is tidy
+        run: |
+          make tidy
+          git diff --exit-code -- go.mod go.sum
+
+  race:
+    name: race detector
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: make test-race
+
+  windows:
+    name: agent on Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # The agent's guarantee — a private key is readable by its owner and
+      # nobody else — is a file mode on Unix and an ACL on Windows, and only a
+      # real Windows kernel can say whether the ACL is right. Cross-compiling
+      # proves it builds, which is the easy half, and the half that would pass
+      # while every key on the host was readable by everyone.
+      #
+      # What runs here is the platform-specific behaviour and the identity
+      # store: the ACL that replaces the mode, the refusal of Unix ownership
+      # and of the Linux deployment profiles, an identity key granting
+      # Everyone being refused, and a destination naming C:\ paths being
+      # accepted. The rest of the suite is built !windows because its fixtures
+      # are Unix paths and Unix modes, not because the logic differs.
+      #
+      # `go test` directly rather than a Makefile target: the Windows runner
+      # images do not ship make.
+      - name: The agent's tests, on Windows
+        run: go test ./... -v
+
+  iis:
+    name: IIS end to end
+    runs-on: windows-latest
+
+    # The bar every deployment profile is held to, applied to the one that is
+    # not a Linux service. `make verify-profiles` starts the real service in a
+    # container, installs a certificate through the agent's own installer, and
+    # completes a TLS handshake proving the service served it. IIS cannot be run
+    # in a container, so it is run here instead — and the claim in the catalogue
+    # that this profile was verified against IIS is checked against the web
+    # server actually on this runner, so that it cannot quietly become a claim
+    # about a version nobody has used.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install IIS
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Web-Scripting-Tools is the WebAdministration PowerShell module, which
+          # is what the profile's bind command imports. Without it the binding
+          # step fails with "module not found" on a host that has IIS.
+          Install-WindowsFeature -Name Web-Server, Web-Scripting-Tools -IncludeManagementTools
+          if ((Get-Service W3SVC).Status -ne 'Running') { Start-Service W3SVC }
+
+      - name: Give Default Web Site an https binding with no certificate on it
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module WebAdministration
+          # Deliberately no certificate. The agent's job is to put one on an
+          # existing binding — it does not create sites or bindings, because
+          # that means choosing a port, an address and whether SNI is on. A
+          # fixture that pre-bound a certificate would leave the part that
+          # matters untested.
+          New-WebBinding -Name 'Default Web Site' -Protocol https -Port 443 -IPAddress '*'
+          Get-WebBinding -Name 'Default Web Site' | Format-List
+
+      - name: Install, renew and roll back against the running server
+        shell: powershell
+        run: |
+          # No $ErrorActionPreference here, unlike the steps around it. `go test`
+          # writes to stderr, and under Stop PowerShell turns a native command's
+          # stderr into a terminating error — which would fail this step on a
+          # passing test run. The exit status is the verdict, so it is read.
+          go test -tags iis -run TestIISServesWhatTheAgentInstalls -v ./...
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: The catalogue's claim is about this machine
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $line = Select-String -Path profiles_catalogue.go -Pattern 'Verified:\s+"IIS ([^"]+)"'
+          if (-not $line) { Write-Error "the iis profile records no verification"; exit 1 }
+          $claim = $line.Matches[0].Groups[1].Value
+
+          $version = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\InetStp' -Name VersionString).VersionString `
+            -replace '^Version\s*', ''
+          $caption = (Get-CimInstance Win32_OperatingSystem).Caption
+          if ($caption -notmatch 'Server (\d{4})') { Write-Error "unrecognised Windows: $caption"; exit 1 }
+          $year = $Matches[1]
+
+          Write-Host "claim:  IIS $claim"
+          Write-Host "runner: IIS $version on Windows Server $year"
+          if ($claim -notlike "*$version*" -or $claim -notlike "*Server $year*") {
+            # Built first, then formatted. PowerShell binds -f tighter than +,
+            # so formatting a concatenation formats only its second half — which
+            # is how this message first reached a log reading "verified against
+            # 'IIS {0}'". A message that is only ever printed when something is
+            # already wrong is the worst place for a second thing to be wrong.
+            $message = "the catalogue says this profile was verified against 'IIS {0}', and what " +
+              "just ran it was IIS {1} on Windows Server {2}. Update the Verified line."
+            Write-Error ($message -f $claim, $version, $year)
+            exit 1
+          }
+
+  core-contract:
+    name: this agent against the core
+    runs-on: ubuntu-latest
+
+    # The cross-repository check, and the reason the split does not cost what it
+    # could.
+    #
+    # While the agent lived in the monorepo, one CI run built the core and the
+    # agent together. Split apart, nothing on this side asks "does the core
+    # still work with this agent" — and the answer arriving in production is
+    # exactly what moving the code was not supposed to buy.
+    #
+    # The harness is scripts/agent-lifecycle.sh in the core's repository, and it
+    # was written with AGENT_BIN as the seam for precisely this: it builds an
+    # agent from its own tree by default and takes one from anywhere otherwise.
+    # Here it takes the agent built from this commit.
+    #
+    # Against main rather than a release tag, deliberately. The core's published
+    # releases predate the harness, and the useful question during development
+    # is whether the core being worked on today still speaks to this agent.
+    # It means a change in the core can turn this red — which is the point: it
+    # is a contract between two repositories, and either side can break it.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: agent
+
+      - uses: actions/checkout@v4
+        with:
+          repository: certpilot/certpilot
+          path: core
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: core/go.work
+          cache-dependency-path: "**/go.sum"
+
+      - name: Build the agent from this commit
+        working-directory: agent
+        run: go build -o "$GITHUB_WORKSPACE/certpilot-agent" ./cmd/
+
+      - name: Enrol, request, install, report
+        working-directory: core
+        env:
+          AGENT_BIN: ${{ github.workspace }}/certpilot-agent
+        run: ./scripts/agent-lifecycle.sh
+
+      # The logs of a failed run say which half was wrong, and they are gone
+      # with the runner otherwise.
+      - name: The logs, if it failed
+        if: failure()
+        working-directory: core
+        run: |
+          for f in .agentlife/core.log .agentlife/gateway.log \
+                   .agentlife/request.log .agentlife/run.log; do
+            [ -s "$f" ] || continue
+            echo "::group::$f"
+            tail -80 "$f"
+            echo "::endgroup::"
+          done
+
+  image:
+    name: image builds
+    runs-on: ubuntu-latest
+
+    # Every Dockerfile in the tree this came from was unverified until a job
+    # existed that built it, and one of them could not have built at all.
+    # Nothing ever tried. This is what stops that recurring here.
+    env:
+      # Deliberately not a plausible version. If this ever leaks into a
+      # published image, it should be obvious rather than look like a release.
+      STAMP: 0.0.0-ci-stamp-check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: certpilot-agent:ci
+          # A sentinel the next step asserts the binary reports back. An ldflags
+          # -X path that does not name a real symbol fails silently — the build
+          # succeeds and the binary keeps its compiled-in default for ever — so
+          # the stamp has to be checked rather than trusted. That path changed
+          # when this module moved repositories, which is precisely the kind of
+          # edit this catches.
+          build-args: |
+            VERSION=${{ env.STAMP }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Building proves it compiles. This proves the binary in the image is the
+      # right one and can actually start — a Go binary built for the wrong
+      # architecture, or a CMD naming a path that is not there, both build
+      # perfectly and fail here.
+      - name: Run it, and check the stamp arrived
+        run: |
+          set -euo pipefail
+          docker run --rm certpilot-agent:ci --help >/dev/null
+
+          got="$(docker run --rm certpilot-agent:ci --version)"
+          if [ "$got" != "${{ env.STAMP }}" ]; then
+            echo "::error::the agent reports version '$got', expected '${{ env.STAMP }}'."
+            echo "::error::The -ldflags -X path in the Dockerfile no longer names a real symbol."
+            exit 1
+          fi
+          echo "the agent reports the version it was stamped with"
+
+      - name: Confirm it does not run as root
+        run: |
+          set -euo pipefail
+          # --entrypoint is the whole point of this line. The image sets
+          # ENTRYPOINT to the binary, so `docker run IMAGE id -u` does not run
+          # id — it passes "id -u" to the agent as arguments.
+          uid="$(timeout 30 docker run --rm --entrypoint id certpilot-agent:ci -u)"
+          if [ "$uid" = "0" ]; then
+            echo "::error::the agent image runs as root"
+            exit 1
+          fi
+          echo "the agent runs as uid $uid"

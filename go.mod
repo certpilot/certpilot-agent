@@ -1,4 +1,4 @@
-module github.com/certpilot/certpilot/agent
+module github.com/certpilot/certpilot-agent
 
 go 1.26.6
 

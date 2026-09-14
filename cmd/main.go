@@ -22,8 +22,8 @@ import (
 	"syscall"
 	"time"
 
+	agent "github.com/certpilot/certpilot-agent"
 	"github.com/certpilot/certpilot-agent-sdk/agentapi"
-	"github.com/certpilot/certpilot/agent"
 )
 
 func main() {

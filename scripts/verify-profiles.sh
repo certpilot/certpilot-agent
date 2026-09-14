@@ -109,7 +109,7 @@ build_agent() {
     arch="$(docker version --format '{{.Server.Arch}}' 2>/dev/null)"
     [[ -n "$arch" ]] || arch=amd64
     echo "  building the agent for linux/$arch"
-    (cd "$ROOT/agent" && CGO_ENABLED=0 GOOS=linux GOARCH="$arch" \
+    (cd "$ROOT" && CGO_ENABLED=0 GOOS=linux GOARCH="$arch" \
         go build -o "$WORK/certpilot-agent" ./cmd) || return 1
 }
 

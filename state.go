@@ -31,7 +31,7 @@ import (
 //
 // A var rather than a const so a release build can stamp it:
 //
-//	-ldflags "-X github.com/certpilot/certpilot/agent.Version=1.2.3"
+//	-ldflags "-X github.com/certpilot/certpilot-agent.Version=1.2.3"
 //
 // It was a const, which meant every agent ever built reported 0.1.0 whatever it
 // actually was — and this value is the one an operator uses to answer "which of
