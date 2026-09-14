@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"testing"
 	"time"
@@ -130,5 +131,77 @@ func TestAHostWithNoIdentitySaysWhatToRun(t *testing.T) {
 	}
 	if Enrolled(t.TempDir()) {
 		t.Fatal("an empty directory is not an enrolled host")
+	}
+}
+
+// What an agent reports about itself is what the fleet view answers "which of
+// these hosts is running something old" with, and what the core's compatibility
+// matrix records for each released agent it measures. These cover the four ways
+// a binary can arrive at a host.
+func TestWhatTheAgentSaysItsVersionIs(t *testing.T) {
+	buildInfo := func(version string) func() (*debug.BuildInfo, bool) {
+		return func() (*debug.BuildInfo, bool) {
+			return &debug.BuildInfo{Main: debug.Module{Version: version}}, true
+		}
+	}
+
+	for _, tc := range []struct {
+		name    string
+		stamped string
+		read    func() (*debug.BuildInfo, bool)
+		want    string
+	}{
+		{
+			// The container build. An explicit statement beats an inference.
+			name:    "a stamped build keeps its stamp",
+			stamped: "0.9.1",
+			read:    buildInfo("v0.2.0"),
+			want:    "0.9.1",
+		},
+		{
+			// `go install github.com/certpilot/certpilot-agent/cmd@v0.2.0`.
+			// This reported 0.1.0-dev before, and the core believed it.
+			name:    "go install takes the module version",
+			stamped: devVersion,
+			read:    buildInfo("v0.2.0"),
+			want:    "0.2.0",
+		},
+		{
+			// A modified working tree. Go appends +dirty itself, so this does
+			// not claim to be the release it was branched from — which is the
+			// whole reason the default carried a -dev suffix.
+			name:    "a modified working tree says so",
+			stamped: devVersion,
+			read:    buildInfo("v0.2.0+dirty"),
+			want:    "0.2.0+dirty",
+		},
+		{
+			// Between tags. The pseudo-version names the commit, which is more
+			// than a hand-maintained constant could ever say.
+			name:    "a commit between tags reports the commit",
+			stamped: devVersion,
+			read:    buildInfo("v0.2.1-0.20260914130547-2043ed16411a"),
+			want:    "0.2.1-0.20260914130547-2043ed16411a",
+		},
+		{
+			// -buildvcs=false, or a build from outside a repository. Nothing is
+			// known, and the default is the honest answer.
+			name:    "no version to derive stays a development build",
+			stamped: devVersion,
+			read:    buildInfo("(devel)"),
+			want:    devVersion,
+		},
+		{
+			name:    "no build info at all is a development build",
+			stamped: devVersion,
+			read:    func() (*debug.BuildInfo, bool) { return nil, false },
+			want:    devVersion,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := resolveVersion(tc.stamped, tc.read); got != tc.want {
+				t.Errorf("reported %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
