@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -42,7 +43,63 @@ import (
 // The default keeps the -dev suffix on purpose. An unstamped build is a
 // development build, and saying so is better than claiming to be the release it
 // was branched from.
-var Version = "0.1.0-dev"
+var Version = devVersion
+
+const devVersion = "0.1.0-dev"
+
+// Only the container build passes that -ldflags, and it is no longer the only
+// way a release reaches a host. `go install github.com/certpilot/certpilot-agent/cmd@v0.2.0`
+// produces a perfectly good release binary with no stamp at all, so it reported
+// 0.1.0-dev — and the core believed it, because this value is what enrolment
+// and every heartbeat send.
+//
+// That is worse than cosmetic in two places. An operator asking "which of these
+// hosts is running something old" gets told every installed-by-go agent is a
+// development build. And the core's own compatibility matrix fetches released
+// agents and prints what each one says it is, so the instrument built to
+// measure versions would have recorded the same wrong answer for all of them.
+//
+// The toolchain already knows, and knows more precisely than a constant can.
+// Go records the module version in the binary's build info, derived from VCS
+// when there is one, so the four cases report themselves honestly:
+//
+//	go install .../cmd@v0.2.0      0.2.0
+//	a clean checkout of that tag   0.2.0        — it is that source
+//	a modified working tree        0.2.0+dirty  — and says so
+//	a commit between tags          a pseudo-version naming the commit
+//
+// The -dev default is therefore not the working-tree case any more. It is the
+// case where there is no build info to read at all — `-buildvcs=false`, or a
+// build from a directory that is not a repository — where nothing is known and
+// guessing would be worse than admitting it.
+func init() { Version = resolveVersion(Version, debug.ReadBuildInfo) }
+
+// resolveVersion keeps an explicit stamp and otherwise takes what the toolchain
+// recorded. Split out from init so it can be tested without building a binary
+// two different ways.
+func resolveVersion(stamped string, read func() (*debug.BuildInfo, bool)) string {
+	// A stamp wins. It is the container build saying what it is, and that is a
+	// deliberate statement rather than an inference.
+	if stamped != devVersion {
+		return stamped
+	}
+	info, ok := read()
+	if !ok {
+		return stamped
+	}
+	// "(devel)" is what Go records when it has a module but no VCS version to
+	// derive one from, and "" when there is no module information at all.
+	// Neither says anything, which is what the default already says.
+	switch info.Main.Version {
+	case "", "(devel)", "devel":
+		return stamped
+	}
+	// Without the v, to match what the container build stamps: the release
+	// workflow passes the tag with its leading v already stripped, and an
+	// estate reporting both "v0.2.0" and "0.2.0" for the same release is a
+	// grouping nobody can do arithmetic on.
+	return strings.TrimPrefix(info.Main.Version, "v")
+}
 
 // File names inside the state directory.
 const (
