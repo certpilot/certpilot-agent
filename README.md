@@ -115,8 +115,13 @@ release rather than the most recent commit. Pin anyway for anything you depend
 on.
 
 The Go module is tagged in step with the image, so
-`go install github.com/certpilot/certpilot-agent/cmd@v0.2.0` installs the same
+`go install github.com/certpilot/certpilot-agent/cmd@v0.2.1` installs the same
 code the image contains.
+
+Every tag also gets its release page, created by the same workflow once the image
+has published. The notes are the tag's annotation, so write them with `git tag -a`;
+a lightweight tag gets GitHub's list of the pull requests merged since the last
+release.
 
 ## Licence
 
