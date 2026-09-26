@@ -221,7 +221,17 @@ func HeldIn(stateDir string) []*Held {
 func (r *Runner) RenewDue(ctx context.Context) int {
 	renewed := 0
 	for _, held := range r.HeldCertificates() {
-		if time.Now().Before(held.RenewAfter) {
+		at, overridden := renewAt(*held)
+		if overridden {
+			// Every cycle until it is due, on purpose. It means the core this
+			// host talks to predates the fix for #109, and that is worth
+			// seeing in the logs of every host it affects.
+			slog.Warn("the core's renew_after is before this certificate was issued; "+
+				"renewing when a third of its life remains instead",
+				"names", held.Names, "renew_after", held.RenewAfter.Format(time.RFC3339),
+				"issued_at", held.IssuedAt.Format(time.RFC3339), "renewing_at", at.Format(time.RFC3339))
+		}
+		if time.Now().Before(at) {
 			continue
 		}
 		slog.Info("renewing a certificate this host holds",
