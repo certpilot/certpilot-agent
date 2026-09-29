@@ -61,6 +61,11 @@ type RequestOptions struct {
 	Names   []string
 	KeyType string
 	KeySize int
+	// Renews is the certificate this replaces, when renewing one this host
+	// holds. Without it the core recorded the renewal as a new certificate and
+	// left the old one ISSUED, alerting later about a certificate nothing was
+	// serving. Cores that predate it ignore it.
+	Renews string
 }
 
 // Request obtains a certificate for this host.
@@ -97,10 +102,14 @@ func (r *Runner) Request(ctx context.Context, opts RequestOptions) (*Held, error
 	var envelope struct {
 		Data Issued `json:"data"`
 	}
-	err = r.client.post(ctx, "/api/v1/agent/certificates", map[string]any{
+	payload := map[string]any{
 		"csr_pem":      string(csrPEM),
 		"install_path": dir,
-	}, &envelope)
+	}
+	if opts.Renews != "" {
+		payload["renews"] = opts.Renews
+	}
+	err = r.client.post(ctx, "/api/v1/agent/certificates", payload, &envelope)
 	if err != nil {
 		// The key is discarded rather than kept for a retry. A key that exists
 		// without a certificate is a secret nobody is tracking, and generating
@@ -237,7 +246,7 @@ func (r *Runner) RenewDue(ctx context.Context) int {
 		slog.Info("renewing a certificate this host holds",
 			"names", held.Names, "expires", held.NotAfter.Format(time.RFC3339))
 
-		if _, err := r.Request(ctx, RequestOptions{Names: held.Names}); err != nil {
+		if _, err := r.Request(ctx, RequestOptions{Names: held.Names, Renews: held.CertificateID}); err != nil {
 			// Not fatal, and not retried tightly. The next cycle tries again,
 			// and RenewAfter leaves room for a great many cycles before the
 			// certificate actually expires.
