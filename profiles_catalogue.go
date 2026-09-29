@@ -54,7 +54,6 @@ var catalogue = []Profile{
 		CertPath:      profileDir + "/" + certificatePlaceholder + "/cert.pem",
 		KeyPath:       profileDir + "/" + certificatePlaceholder + "/privkey.pem",
 		FullChainPath: profileDir + "/" + certificatePlaceholder + "/fullchain.pem",
-		KeyMode:       "0640",
 		Check:         []string{"/usr/sbin/nginx", "-t"},
 		Reload:        []string{"/usr/sbin/nginx", "-s", "reload"},
 		Notes: []string{
@@ -64,13 +63,11 @@ var catalogue = []Profile{
 				"from a cache and no fresh client does.",
 			"nginx reloads by starting new workers and letting the old ones finish, " +
 				"so no connection is dropped and no request sees a half-written file.",
-			"The key is written 0640 with no group, which on a root-owned file is the " +
-				"same as 0600 — nginx's master reads the key as root before the workers " +
-				"drop privileges, so the worker user never needs it. The mode is 0640 " +
-				"rather than 0600 so that adding `\"group\": \"ssl-cert\"` is the only " +
-				"change needed on a host that shares the key with something else, " +
-				"rather than two changes where forgetting the second one silently does " +
-				"nothing.",
+			"The key is written 0600 and owned by root. nginx's master reads it as " +
+				"root before the workers drop privileges, so the worker user never " +
+				"needs it. On a host that shares the key with something else, add " +
+				"`\"group\": \"ssl-cert\"`: naming a group makes the key 0640 for that " +
+				"group, and is the only change needed.",
 		},
 		Verified: "nginx 1.27.5",
 	},
@@ -86,7 +83,6 @@ var catalogue = []Profile{
 		CertPath:      profileDir + "/" + certificatePlaceholder + "/cert.pem",
 		KeyPath:       profileDir + "/" + certificatePlaceholder + "/privkey.pem",
 		FullChainPath: profileDir + "/" + certificatePlaceholder + "/fullchain.pem",
-		KeyMode:       "0640",
 		Check:         []string{"/usr/sbin/apachectl", "configtest"},
 		Reload:        []string{"/usr/sbin/apachectl", "graceful"},
 		Notes: []string{
@@ -118,7 +114,6 @@ var catalogue = []Profile{
 		// this is not simply "PEM with extra steps".
 		CertPath: profileDir + "/" + certificatePlaceholder + "/haproxy.pem",
 		KeyPath:  profileDir + "/" + certificatePlaceholder + "/haproxy.pem",
-		KeyMode:  "0640",
 		Check:    []string{"/usr/sbin/haproxy", "-c", "-f", "/etc/haproxy/haproxy.cfg"},
 		Reload:   []string{"/usr/bin/systemctl", "reload", "haproxy"},
 		Notes: []string{
@@ -146,7 +141,6 @@ var catalogue = []Profile{
 		CertPath:      profileDir + "/" + certificatePlaceholder + "/cert.pem",
 		KeyPath:       profileDir + "/" + certificatePlaceholder + "/privkey.pem",
 		FullChainPath: profileDir + "/" + certificatePlaceholder + "/fullchain.pem",
-		KeyMode:       "0640",
 		Check:         []string{"/usr/bin/caddy", "validate", "--config", "/etc/caddy/Caddyfile"},
 		Reload:        []string{"/usr/bin/caddy", "reload", "--config", "/etc/caddy/Caddyfile", "--force"},
 		Notes: []string{
@@ -317,7 +311,6 @@ var catalogue = []Profile{
 		},
 		Format:   FormatPKCS12,
 		CertPath: profileDir + "/" + certificatePlaceholder + "/keystore.p12",
-		KeyMode:  "0640",
 		Reload:   []string{"/usr/bin/systemctl", "restart", "tomcat10"},
 		Notes: []string{
 			"A keystore is one file holding the certificate, its chain and the key, " +

@@ -98,7 +98,8 @@ func printProfile(p agent.Profile) {
 	row("owner", p.Owner)
 	row("group", p.Group)
 	row("cert_mode", p.CertMode)
-	row("key_mode", p.KeyMode)
+	// Unset means the destination decides: 0600, or 0640 once it names a group.
+	row("key_mode", orDefault(p.KeyMode, "0600, or 0640 when a group is set"))
 	if len(p.Check) > 0 {
 		row("check", strings.Join(p.Check, " "))
 	} else {

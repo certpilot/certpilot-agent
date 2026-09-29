@@ -319,3 +319,59 @@ func TestProfilesReturnsACopy(t *testing.T) {
 		t.Error("Profiles() hands out the catalogue itself, so a caller can rewrite it")
 	}
 }
+
+// TestAProfiledKeyIsGroupReadableOnlyWhenAGroupIsNamed.
+//
+// Five profiles wrote keys at 0640 with no group. On a root-owned file that is
+// readable by every member of group root, and the core's inventory reports a
+// group-readable key as critical ("has to be reissued"). So an install through
+// the nginx profile raised that finding against the file the agent had just
+// written: the agent manufacturing the alert it exists to report.
+func TestAProfiledKeyIsGroupReadableOnlyWhenAGroupIsNamed(t *testing.T) {
+	for _, p := range Profiles() {
+		t.Run(p.Name, func(t *testing.T) {
+			if !p.RunsHere() || p.Store != "" {
+				t.Skipf("%q does not write a key file on this platform", p.Name)
+			}
+			body := `{"destinations":[{"name":"x","certificate":"www.example.com","profile":"` +
+				p.Name + `"` + keystoreFields(p) + `}]}`
+			spec, err := writeSpec(t, body)
+			if err != nil {
+				t.Fatalf("loading: %v", err)
+			}
+			d := spec.Destinations[0]
+			_, keyMode := d.modes()
+			if strings.TrimSpace(d.Group) == "" && keyMode&0o070 != 0 {
+				t.Errorf("the key is written %04o with no group named: readable by every member of the owner's group",
+					keyMode.Perm())
+			}
+		})
+	}
+}
+
+// TestNamingAGroupIsTheOnlyChangeNeededToShareAKey keeps the reason the
+// profiles used 0640: a host that shares the key with a service account adds
+// "group" and nothing else. Two changes, where forgetting the second silently
+// does nothing, is the trap that default was avoiding.
+func TestNamingAGroupIsTheOnlyChangeNeededToShareAKey(t *testing.T) {
+	spec, err := writeSpec(t, `{"destinations":[
+		{"name":"web","certificate":"www.example.com","profile":"nginx","group":"root"}
+	]}`)
+	if err != nil {
+		t.Fatalf("loading: %v", err)
+	}
+	if _, keyMode := spec.Destinations[0].modes(); keyMode.Perm() != 0o640 {
+		t.Fatalf("with a group named the key is %04o, want 0640", keyMode.Perm())
+	}
+
+	// And what the operator wrote still wins.
+	spec, err = writeSpec(t, `{"destinations":[
+		{"name":"web","certificate":"www.example.com","profile":"nginx","group":"root","key_mode":"0600"}
+	]}`)
+	if err != nil {
+		t.Fatalf("loading: %v", err)
+	}
+	if _, keyMode := spec.Destinations[0].modes(); keyMode.Perm() != 0o600 {
+		t.Fatalf("an explicit key_mode 0600 became %04o", keyMode.Perm())
+	}
+}
