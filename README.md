@@ -115,7 +115,7 @@ release rather than the most recent commit. Pin anyway for anything you depend
 on.
 
 The Go module is tagged in step with the image, so
-`go install github.com/certpilot/certpilot-agent/cmd@v0.2.2` installs the same
+`go install github.com/certpilot/certpilot-agent/cmd@v0.2.3` installs the same
 code the image contains.
 
 Every tag also gets its release page, created by the same workflow once the image
