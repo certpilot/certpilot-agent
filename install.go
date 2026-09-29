@@ -171,7 +171,8 @@ type Destination struct {
 	Owner string `json:"owner,omitempty"`
 	Group string `json:"group,omitempty"`
 	// CertMode and KeyMode are octal strings — "0644", "0640". Defaulted rather
-	// than required, and the key's default is 0600.
+	// than required. The key's default is 0600, or 0640 when Group names who
+	// else may read it: see defaultKeyMode.
 	CertMode string `json:"cert_mode,omitempty"`
 	KeyMode  string `json:"key_mode,omitempty"`
 
@@ -314,7 +315,7 @@ func (d *Destination) validate() error {
 	if err != nil {
 		return fmt.Errorf("cert_mode: %w", err)
 	}
-	keyMode, err := parseMode(d.KeyMode, 0o600)
+	keyMode, err := parseMode(d.KeyMode, d.defaultKeyMode())
 	if err != nil {
 		return fmt.Errorf("key_mode: %w", err)
 	}
@@ -369,8 +370,26 @@ func (d *Destination) combined() bool { return d.CertPath == d.KeyPath }
 // modes resolves the two file modes, having already been validated.
 func (d *Destination) modes() (certMode, keyMode os.FileMode) {
 	certMode, _ = parseMode(d.CertMode, 0o644)
-	keyMode, _ = parseMode(d.KeyMode, 0o600)
+	keyMode, _ = parseMode(d.KeyMode, d.defaultKeyMode())
 	return certMode, keyMode
+}
+
+// defaultKeyMode is the key's mode when the destination does not set one:
+// 0600, unless a group is named, and then 0640 so that group can read it.
+//
+// Five profiles used to write 0640 whatever the destination said, so that
+// naming a group was the only change needed to share a key. With no group
+// named, that file was readable by every member of the owner's group (root,
+// on most hosts), and the core's inventory reports a group-readable key as
+// critical, to be reissued. An install through the nginx profile raised that
+// finding against the file the agent had just written. Deciding from the group
+// keeps the one-line change for a shared key and gives nothing away without
+// one.
+func (d *Destination) defaultKeyMode() os.FileMode {
+	if strings.TrimSpace(d.Group) != "" {
+		return 0o640
+	}
+	return 0o600
 }
 
 func parseMode(text string, fallback os.FileMode) (os.FileMode, error) {

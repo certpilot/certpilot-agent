@@ -21,8 +21,9 @@ bind :443 ssl crt /etc/certpilot/live/www.example.com/haproxy.pem
 
 The profile sets `cert_path` and `key_path` to the same file. The agent
 recognises this as the combined layout, writes the certificate, chain and key
-in the required order, and applies the private key's file mode (`0640`) to the
-combined file rather than the certificate's.
+in the required order, and applies the private key's file mode (`0600`, or
+`0640` when the destination names a group) to the combined file rather than the
+certificate's.
 
 ## What the agent does
 

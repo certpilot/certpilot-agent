@@ -42,9 +42,11 @@ Both perform the same operation — the Debian unit file's `ExecReload` invokes
 whereas unit names are not. nginx starts new worker processes and allows
 existing ones to finish, so no connection is dropped.
 
-The private key is written with mode `0640` and owned by root. nginx's master
+The private key is written with mode `0600` and owned by root. nginx's master
 process reads the key before worker processes drop privileges, so the worker
-user does not require access to it.
+user does not require access to it. If something else on the host has to read
+the key, name its group on the destination (`"group": "ssl-cert"`); the key is
+then written `0640` for that group, and nothing else needs changing.
 
 ## Limitations
 
