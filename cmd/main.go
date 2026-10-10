@@ -179,6 +179,9 @@ func runAgent(ctx context.Context, args []string) error {
 			len(report.Certificates), report.FilesSeen)
 		return nil
 	}
+	if runningAsService() {
+		return runAsService(runner.Run)
+	}
 	return runner.Run(ctx)
 }
 
