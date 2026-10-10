@@ -571,8 +571,23 @@ certpilot-agent run --once         # one cycle, then exit — for cron or a unit
 certpilot-agent status             # what this host holds and when it last reported
 ```
 
-As a systemd unit — see [Where it runs](#where-it-runs) for the platforms
-this is supported on:
+The `.deb` and `.rpm` from a release install the binary to
+`/usr/bin/certpilot-agent` with two ways to run it, neither enabled until you
+choose one after enrolling:
+
+```bash
+sudo certpilot-agent enrol --server=https://certpilot.example.com --token=...
+sudo systemctl enable --now certpilot-agent          # the daemon
+# or
+sudo systemctl enable --now certpilot-agent.timer    # one cycle every 5 minutes
+```
+
+Both units do nothing until `/var/lib/certpilot-agent/agent.json` exists.
+Removing the package stops them and leaves the identity in place, so a
+reinstall does not need a new enrolment.
+
+Installed by hand, as a systemd unit — see [Where it runs](#where-it-runs) for
+the platforms this is supported on:
 
 ```ini
 [Unit]
