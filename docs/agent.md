@@ -589,6 +589,18 @@ RestartSec=30
 WantedBy=multi-user.target
 ```
 
+On Windows, as a service, from an elevated prompt after enrolling:
+
+```powershell
+certpilot-agent service install     # registers it to start with Windows
+Start-Service certpilot-agent
+certpilot-agent service uninstall   # stops and removes it; the identity stays
+```
+
+It runs as LocalSystem, restarts 30 seconds after a failure, and logs to the
+Application event log under `certpilot-agent`. It is not installed if the host
+has not enrolled.
+
 It runs as root when it has to write into `/etc/nginx` and reload a service.
 Where it does not, run it as a user that owns the certificate directory.
 

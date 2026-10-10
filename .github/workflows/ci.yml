@@ -70,6 +70,13 @@ jobs:
       - name: The agent's tests, on Windows
         run: go test ./... -v
 
+      # Installs the real binary as a Windows service, starts it, and waits for
+      # a heartbeat. Gated by a variable because it changes the machine.
+      - name: The agent as a Windows service
+        env:
+          CERTPILOT_SERVICE_TEST: "1"
+        run: go test ./cmd/ -run Service -v
+
   iis:
     name: IIS end to end
     runs-on: windows-latest
