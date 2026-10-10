@@ -1,0 +1,12 @@
+# For hosts where a resident daemon is not allowed. Enable this or
+# certpilot-agent.service, not both.
+[Unit]
+Description=Run the CertPilot agent every 5 minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=5min
+Unit=certpilot-agent-once.service
+
+[Install]
+WantedBy=timers.target

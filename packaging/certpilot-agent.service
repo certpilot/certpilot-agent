@@ -1,0 +1,17 @@
+[Unit]
+Description=CertPilot agent
+Documentation=https://github.com/certpilot/certpilot-agent
+After=network-online.target
+Wants=network-online.target
+# Nothing to do until this host has enrolled, and a unit that fails every 30
+# seconds until then would bury the one log line that says why.
+ConditionPathExists=/var/lib/certpilot-agent/agent.json
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/certpilot-agent run
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
