@@ -17,6 +17,7 @@ Everything else here follows from that.
 - [Installing where the server reads](#installing-where-the-server-reads)
 - [Inventory](#inventory)
 - [Running it](#running-it)
+- [When the agent can't run as shipped](#when-the-agent-cant-run-as-shipped)
 - [What can go wrong](#what-can-go-wrong)
 
 ---
@@ -591,6 +592,49 @@ WantedBy=multi-user.target
 
 It runs as root when it has to write into `/etc/nginx` and reload a service.
 Where it does not, run it as a user that owns the certificate directory.
+
+---
+
+## When the agent can't run as shipped
+
+Most hosts that "can't run the agent" can, with one setting changed.
+
+| The host | What to do |
+|:---|:---|
+| No Docker, no Go | Download the binary from the [releases page](https://github.com/certpilot/certpilot-agent/releases): Linux (amd64, arm64, armv7, 386), Windows, macOS, FreeBSD. Check it against `SHA256SUMS` |
+| No systemd (Alpine, older Red Hat, Devuan) | Write the `reload` yourself. Profiles reload with `systemctl`; a destination's own `check` and `reload` win. For OpenRC, `"reload": ["/sbin/rc-service", "nginx", "reload"]`; for SysV, `["/usr/sbin/service", "nginx", "reload"]` |
+| A resident daemon isn't allowed | `certpilot-agent run --once` does everything one cycle of the daemon does, then exits. Run it from cron, a systemd timer or Task Scheduler |
+| Only reachable through a proxy | Set `HTTPS_PROXY` (and `NO_PROXY`) where the agent runs. It is tested, for enrolment and for every later request. Loopback addresses are never proxied |
+| Not root | State goes in `~/.certpilot-agent`. Run as the user who owns the certificate directory |
+
+Scheduled runs, for hosts that can't keep a daemon:
+
+```
+*/5 * * * *  /usr/local/bin/certpilot-agent run --once
+```
+
+```
+schtasks /Create /TN "CertPilot agent" /SC MINUTE /MO 5 /RU SYSTEM ^
+  /TR "\"C:\Program Files\CertPilot\certpilot-agent.exe\" run --once"
+```
+
+Run it at least as often as the heartbeat interval the host enrolled with,
+which is 5 minutes unless set. The core raises `agent.stale` after three missed
+intervals.
+
+**Behind a proxy under systemd**, the variable has to be in the unit, because a
+service does not inherit a login shell's environment:
+
+```ini
+[Service]
+Environment=HTTPS_PROXY=http://proxy.example.com:3128
+```
+
+**When no agent can run at all** (an appliance, a managed service), the core can
+deploy to it directly instead: see
+[deployment targets](https://github.com/certpilot/certpilot/blob/main/docs/deployment.md#the-five-target-types).
+Those targets receive the private key from the core, which the agent never
+does, so it is a different decision, not a drop-in replacement.
 
 ---
 
