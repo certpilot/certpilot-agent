@@ -1,0 +1,10 @@
+[Unit]
+Description=CertPilot agent, one cycle
+Documentation=https://github.com/certpilot/certpilot-agent
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/var/lib/certpilot-agent/agent.json
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/certpilot-agent run --once

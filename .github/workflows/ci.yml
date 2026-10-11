@@ -46,6 +46,8 @@ jobs:
       - run: ./scripts/build-release.sh dev dist
       - name: the checksums match the files
         run: cd dist && sha256sum -c SHA256SUMS
+      - name: the deb and rpm install on Debian and Rocky Linux
+        run: ./scripts/verify-packages.sh dist
 
   race:
     name: race detector

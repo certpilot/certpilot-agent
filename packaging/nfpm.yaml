@@ -1,0 +1,39 @@
+# Built by scripts/build-release.sh, once per Linux architecture. nfpm does not
+# expand variables in a src path, so the script writes the binary's path over
+# @BINARY@ in a copy of this file.
+name: certpilot-agent
+arch: ${NFPM_ARCH}
+platform: linux
+version: ${NFPM_VERSION}
+maintainer: CertPilot <https://github.com/certpilot>
+description: |
+  The CertPilot host agent. Generates its own private keys, requests
+  certificates for this host and installs them where its services read them.
+homepage: https://github.com/certpilot/certpilot-agent
+license: Apache-2.0
+
+contents:
+  - src: "@BINARY@"
+    dst: /usr/bin/certpilot-agent
+    file_info:
+      mode: 0755
+  - src: packaging/certpilot-agent.service
+    dst: /usr/lib/systemd/system/certpilot-agent.service
+  - src: packaging/certpilot-agent-once.service
+    dst: /usr/lib/systemd/system/certpilot-agent-once.service
+  - src: packaging/certpilot-agent.timer
+    dst: /usr/lib/systemd/system/certpilot-agent.timer
+  # The identity key lives here, so nobody else may list it.
+  - dst: /var/lib/certpilot-agent
+    type: dir
+    file_info:
+      mode: 0700
+  # Where installs.json is read from by default.
+  - dst: /etc/certpilot
+    type: dir
+    file_info:
+      mode: 0755
+
+scripts:
+  postinstall: packaging/postinstall.sh
+  preremove: packaging/preremove.sh
