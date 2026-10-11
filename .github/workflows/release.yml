@@ -127,3 +127,41 @@ jobs:
           fi
 
           gh release create "$TAG" --verify-tag --title "$TAG" "${notes[@]}" "${flags[@]}"
+
+  binaries:
+    name: publish binaries
+    # Archives for every platform, for hosts with no Docker and no Go: Windows
+    # servers, 32-bit ARM, FreeBSD. After the release page exists, because they
+    # are attached to it.
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build every platform
+        env:
+          TAG: ${{ github.ref_name }}
+        run: ./scripts/build-release.sh "${TAG#v}" dist
+
+      # A binary that does not report the tag was not stamped with it, and
+      # would be published as a release it is not.
+      - name: The Linux build reports this release
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          tar -xzf "dist/certpilot-agent_${TAG#v}_linux_amd64.tar.gz" -C "$RUNNER_TEMP"
+          got=$("$RUNNER_TEMP/certpilot-agent_${TAG#v}_linux_amd64/certpilot-agent" version)
+          [ "$got" = "${TAG#v}" ] || { echo "binary says $got, tag is $TAG"; exit 1; }
+
+      - name: Attach them to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        # --clobber so re-running a tag's workflow replaces its files.
+        run: gh release upload "$TAG" dist/* --clobber

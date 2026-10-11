@@ -33,6 +33,20 @@ jobs:
           make tidy
           git diff --exit-code -- go.mod go.sum
 
+  platforms:
+    name: builds for every platform
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # The same script the release runs, so a tag is never the first time a
+      # target is built.
+      - run: ./scripts/build-release.sh dev dist
+      - name: the checksums match the files
+        run: cd dist && sha256sum -c SHA256SUMS
+
   race:
     name: race detector
     runs-on: ubuntu-latest

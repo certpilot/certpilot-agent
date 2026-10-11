@@ -17,6 +17,10 @@ the key does not, and there is no code path that would let it.
 go install github.com/certpilot/certpilot-agent/cmd@latest
 ```
 
+No Go or Docker on the host? Each [release](https://github.com/certpilot/certpilot-agent/releases)
+has a static binary for Linux (amd64, arm64, armv7, 386), Windows (amd64, arm64),
+macOS and FreeBSD, with a `SHA256SUMS` file to check it against.
+
 ```
 docker run --rm -v certpilot-agent:/var/lib/certpilot-agent \
     ghcr.io/certpilot/agent:latest --help
