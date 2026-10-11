@@ -53,6 +53,8 @@ func main() {
 		err = runInstall(ctx, os.Args[2:])
 	case "profiles":
 		err = runProfiles(os.Args[2:])
+	case "service":
+		err = runServiceCommand(os.Args[2:])
 	case "-h", "--help", "help":
 		usage()
 		return
@@ -86,6 +88,7 @@ func usage() {
   certpilot-agent install [--installs=FILE] [--force] [--offline]
   certpilot-agent profiles [NAME] [--detect]   which platforms are covered
   certpilot-agent status [--state-dir=DIR]
+  certpilot-agent service install|uninstall    Windows: run as a service
   certpilot-agent version
 
 Enrolment generates this host's identity key locally. The private half is never
@@ -175,6 +178,9 @@ func runAgent(ctx context.Context, args []string) error {
 		fmt.Printf("reported: %d certificate file(s) from %d file(s) scanned\n",
 			len(report.Certificates), report.FilesSeen)
 		return nil
+	}
+	if runningAsService() {
+		return runAsService(runner.Run)
 	}
 	return runner.Run(ctx)
 }
