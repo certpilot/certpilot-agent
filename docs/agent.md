@@ -17,7 +17,7 @@ Everything else here follows from that.
 - [Installing where the server reads](#installing-where-the-server-reads)
 - [Inventory](#inventory)
 - [Running it](#running-it)
-- [When the agent can't run as shipped](#when-the-agent-cant-run-as-shipped)
+- [When the agent cannot run as shipped](#when-the-agent-cannot-run-as-shipped)
 - [What can go wrong](#what-can-go-wrong)
 
 ---
@@ -622,7 +622,7 @@ Where it does not, run it as a user that owns the certificate directory.
 
 ---
 
-## When the agent can't run as shipped
+## When the agent cannot run as shipped
 
 Most hosts that "can't run the agent" can, with one setting changed.
 
