@@ -1,6 +1,6 @@
 module github.com/certpilot/certpilot-agent
 
-go 1.26.6
+go 1.26.9
 
 require (
 	github.com/certpilot/certpilot-agent-sdk v0.1.0
@@ -8,4 +8,4 @@ require (
 	software.sslmate.com/src/go-pkcs12 v0.7.3
 )
 
-require golang.org/x/crypto v0.55.0 // indirect
+require golang.org/x/crypto v0.57.0 // indirect
